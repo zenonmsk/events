@@ -52,6 +52,43 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        /* Style cho Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            z-index: 50;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(5px);
+        }
+        .modal-content-wrapper {
+            max-width: 90vw;
+            max-height: 90vh;
+            position: relative;
+        }
+        .modal-content-wrapper img, .modal-content-wrapper iframe {
+            display: block;
+            margin: auto;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            border-radius: 0.5rem;
+        }
+        .close-button {
+            position: absolute;
+            top: -30px;
+            right: 0px;
+            background: none;
+            color: white;
+            font-size: 2rem;
+            cursor: pointer;
+            line-height: 1;
+        }
     </style>
 </head>
 <body class="p-4 md:p-8 flex items-start justify-center">
@@ -95,10 +132,19 @@
 
     </div>
 
+    <!-- Modal Xem trước (Lightbox) -->
+    <div id="previewModal" class="modal-overlay hidden" onclick="closeModal(event)">
+        <div id="modalContentWrapper" class="modal-content-wrapper">
+            <button class="close-button" onclick="closeModal(event)">&times;</button>
+            <div id="previewContent" class="h-full w-full">
+                <!-- Nội dung xem trước (Ảnh hoặc Iframe Video) -->
+            </div>
+        </div>
+    </div>
+
     <!-- Logic JavaScript -->
     <script type="module">
         // Khai báo biến toàn cục (Global variables required by the environment)
-        // Lưu ý: Các biến này không được sử dụng ở đây nhưng cần thiết cho môi trường
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
@@ -115,6 +161,12 @@
         const fileGrid = document.getElementById('fileGrid');
         const errorFeedback = document.getElementById('errorFeedback');
         const apiKeyWarning = document.getElementById('apiKeyWarning');
+        
+        // Modal DOM Elements
+        const previewModal = document.getElementById('previewModal');
+        const previewContent = document.getElementById('previewContent');
+        const modalContentWrapper = document.getElementById('modalContentWrapper');
+
 
         /**
          * Trích xuất ID từ URL Google Drive (hợp lệ cho cả File và Folder).
@@ -166,14 +218,11 @@
          */
         async function fetchFolderContents(folderId, apiKey) {
             if (apiKey === "YOUR_GOOGLE_DRIVE_API_KEY_HERE" || !apiKey) {
-                displayError("Lỗi: Vui lòng thay 'YOUR_GOOGLE_DRIVE_API_KEY_HERE' bằng Google Drive API Key thực tế.");
+                displayError("Lỗi: Vui lòng thay 'YOUR_GOOGLE_DRIVE_API_KEY_HERE' bằng Google Drive API Key thực tế. aa");
                 return null;
             }
 
-            // Tham số truy vấn:
-            // q='folderId' in parents AND trashed=false (Chỉ lấy file trong folder này và không bị xóa)
-            // fields=files(id, name, mimeType) (Chỉ lấy các trường cần thiết)
-            // pageSize=100 (Số lượng file tối đa, có thể cần phân trang nếu thư mục quá lớn)
+            // Tham số truy vấn: q='folderId' in parents AND trashed=false
             const apiUrl = `https://www.googleapis.com/drive/v3/files?q='${folderId}' in parents and trashed=false&fields=files(id,name,mimeType)&key=${apiKey}&pageSize=100`;
             
             try {
@@ -185,7 +234,6 @@
                     if (errorData.error && errorData.error.message) {
                         errorMessage += ` Chi tiết: ${errorData.error.message}.`;
                     }
-                    // Thường lỗi 403 (Permission Denied) nếu folder không công khai hoặc API Key sai
                     displayError(errorMessage + " Đảm bảo folder công khai và API Key hợp lệ.");
                     return null;
                 }
@@ -201,17 +249,78 @@
         }
         
         /**
+         * Mở modal xem trước với nội dung tương ứng.
+         * @param {string} fileId - ID của file.
+         * @param {string} mimeType - MIME type của file.
+         * @param {string} fileName - Tên file.
+         */
+        function openPreview(fileId, mimeType, fileName) {
+            previewContent.innerHTML = '';
+            modalContentWrapper.style.width = 'auto'; // Reset width
+            modalContentWrapper.style.height = 'auto'; // Reset height
+
+            let contentHTML = '';
+            const isImage = mimeType.startsWith('image/');
+            const isVideo = mimeType.startsWith('video/');
+
+            if (isImage) {
+                // // ĐÃ SỬA: Thay đổi từ export=view sang export=download để tăng khả năng nhúng ảnh trực tiếp
+                // const imageUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+                // console.log(imageUrl)
+                // contentHTML = `<img src="${imageUrl}" alt="${fileName}" class="max-w-full max-h-[85vh]">`;
+                // ĐÃ SỬA: Sử dụng iframe và link preview để tránh lỗi chặn nhúng (CORS/Security Policy)
+                const embedUrl = `https://drive.google.com/file/d/${fileId}/preview`;
+                // Sử dụng 100% chiều rộng/cao của modal để đảm bảo ảnh hiển thị lớn
+                                contentHTML = `<iframe src="${embedUrl}" width="100%" height="100%" frameb                r="0" allowfullscreen class="rounded-lg shadow-2xl"></iframe>`;
+                
+                            // Mở rộng Modal cho phù hợp với nội dung nhúng
+                modalContentWrapper.style.width = '90vw'; 
+                modalContentWrapper.style.height = '90vh';
+        } else if (isVideo) {
+                // Link nhúng video
+                const embedUrl = `https://drive.google.com/file/d/${fileId}/preview`;
+                // Đặt kích thước cố định cho iframe để hiển thị tốt trên modal
+                contentHTML = `<iframe src="${embedUrl}" width="800" height="450" allow="autoplay" frameborder="0" allowfullscreen class="rounded-lg shadow-2xl"></iframe>`;
+                modalContentWrapper.style.width = '800px';
+                modalContentWrapper.style.height = '450px';
+
+            } else {
+                // Đối với các file khác (ví dụ: PDF, Tài liệu), mở trong tab mới (fallback)
+                const fileViewUrl = `https://drive.google.com/file/d/${fileId}/view`;
+                window.location.href = fileViewUrl;
+                return; 
+            }
+
+            previewContent.innerHTML = contentHTML;
+            previewModal.classList.remove('hidden');
+            // Thêm class để ngăn cuộn trang chính
+            document.body.classList.add('overflow-hidden');
+        }
+
+        /**
+         * Đóng modal xem trước.
+         */
+        window.closeModal = function(event) {
+            // Ngăn chặn đóng modal nếu click vào nội dung bên trong modal
+            if (event && event.target !== previewModal && event.target.className !== 'close-button') {
+                // Nếu click vào wrapper nhưng không phải chính modal (modal-overlay) hoặc nút đóng, thì không đóng
+                if (event.target.closest('#modalContentWrapper') && event.target !== previewModal) return;
+            }
+            previewModal.classList.add('hidden');
+            // Gỡ bỏ class ngăn cuộn trang chính
+            document.body.classList.remove('overflow-hidden');
+            previewContent.innerHTML = ''; // Xóa nội dung để dừng video/audio
+        }
+        
+        /**
          * Tạo và hiển thị một ô file (thumbnail) trong lưới.
          * @param {Object} file - Đối tượng file từ API.
          */
         function displayFile(file) {
-            // Mặc định cho file không phải ảnh/video hoặc khi không có thumbnail
             let thumbnailContent;
-            const fileViewUrl = `https://drive.google.com/file/d/${file.id}/view`;
             const isImageOrVideo = file.mimeType.startsWith('image/') || file.mimeType.startsWith('video/');
 
             if (isImageOrVideo) {
-                // Sử dụng thumbnail API cho ảnh/video
                 const thumbnailSrc = `https://drive.google.com/thumbnail?id=${file.id}&sz=w150-h150-p`;
 
                 const imgElement = document.createElement('img');
@@ -219,13 +328,11 @@
                 imgElement.alt = file.name;
                 imgElement.classList.add('w-full', 'h-24', 'object-cover', 'rounded-lg', 'mx-auto', 'border', 'border-gray-200');
                 
-                // Fallback nếu thumbnail không tải được (ví dụ: file video lớn)
                 imgElement.onerror = () => {
                     imgElement.outerHTML = `<div class="placeholder h-24 rounded-lg">File đa phương tiện</div>`;
                 };
                 thumbnailContent = imgElement;
             } else {
-                // Icon placeholder cho các loại file khác (ví dụ: tài liệu, zip)
                 const icon = file.mimeType.includes('pdf') ? '📄' : 
                              file.mimeType.includes('document') ? '📝' : 
                              file.mimeType.includes('spreadsheet') ? '📊' : 
@@ -236,25 +343,29 @@
                 thumbnailContent.innerHTML = `<span class="text-3xl">${icon}</span><br><span class="text-xs">(${file.mimeType.split('/').pop()})</span>`;
             }
 
-            // Tạo container cho mỗi file
             const fileItem = document.createElement('div');
             fileItem.classList.add('file-box', 'bg-white', 'border', 'border-gray-300', 'rounded-xl', 'p-2', 'text-center', 'flex', 'flex-col', 'justify-between');
             
-            // Container cho thumbnail/icon
             const thumbnailWrapper = document.createElement('div');
             thumbnailWrapper.classList.add('mb-2');
             thumbnailWrapper.appendChild(thumbnailContent);
             fileItem.appendChild(thumbnailWrapper);
 
-            // Tên file
             const nameElement = document.createElement('p');
             nameElement.textContent = file.name;
             nameElement.classList.add('text-sm', 'font-medium', 'text-gray-800', 'truncate', 'mt-auto');
             fileItem.appendChild(nameElement);
 
-            // Sự kiện click: mở file trên tab hiện tại
+            // Xử lý sự kiện click
             fileItem.onclick = () => {
-                window.location.href = fileViewUrl;
+                if (isImageOrVideo) {
+                    // Mở Preview Modal
+                    openPreview(file.id, file.mimeType, file.name);
+                } else {
+                    // Mở trong tab mới cho các file không phải ảnh/video
+                    const fileViewUrl = `https://drive.google.com/file/d/${file.id}/view`;
+                    window.location.href = fileViewUrl;
+                }
             };
 
             fileGrid.appendChild(fileItem);
@@ -268,7 +379,7 @@
             fileGrid.innerHTML = '';
             errorFeedback.classList.add('hidden');
             resultContainer.classList.add('hidden');
-            apiKeyWarning.classList.remove('hidden'); // Luôn hiển thị cảnh báo API Key
+            apiKeyWarning.classList.remove('hidden'); 
 
             if (!url) {
                 displayError('Vui lòng nhập một liên kết Google Drive Folder.');
@@ -290,13 +401,9 @@
             setLoadingState(false);
 
             if (files && files.length > 0) {
-                // Ẩn thông báo lỗi nếu thành công
                 errorFeedback.classList.add('hidden');
-                
-                // Lặp qua danh sách file và hiển thị
                 files.forEach(displayFile);
             } else if (files !== null) {
-                // Nếu fetchFolderContents trả về mảng rỗng (khác null)
                 displayError('Thư mục rỗng hoặc không tìm thấy file nào được chia sẻ công khai.');
             }
         }
@@ -308,6 +415,13 @@
         driveUrlInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 handleProcess();
+            }
+        });
+        
+        // Sự kiện đóng modal bằng phím ESC
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !previewModal.classList.contains('hidden')) {
+                closeModal();
             }
         });
     </script>
