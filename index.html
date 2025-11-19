@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Google Drive Image Grid</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background-color: #f3f4f6; }
+  .grid-item img {
+    cursor: pointer;
+    transition: transform 0.2s;
+  }
+  .grid-item img:hover {
+    transform: scale(1.05);
+  }
+  /* Lightbox */
+  #lightbox {
+    display: none;
+    position: fixed;
+    top:0; left:0;
+    width:100%; height:100%;
+    background: rgba(0,0,0,0.8);
+    justify-content:center;
+    align-items:center;
+    z-index:1000;
+  }
+  #lightbox img {
+    max-width: 90%;
+    max-height: 90%;
+    border-radius: 8px;
+  }
+</style>
+</head>
+<body class="p-4">
+
+<h1 class="text-2xl font-bold mb-4 text-center">Google Drive Image Grid</h1>
+
+<div id="grid" class="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"></div>
+
+<!-- Lightbox -->
+<div id="lightbox" onclick="this.style.display='none'">
+  <img id="lightbox-img" src="" alt="Preview">
+</div>
+
+<script>
+const FOLDER_ID = "1G4B_lmSb4fb3kSMPHPyKPwa3uty9xkiD";  // Thay bằng Folder ID
+const API_KEY = "AIzaSyC8DDxSNLSupebbcxEitkt279pvHj2ugzA";      // Thay bằng API Key
+const REFRESH_INTERVAL = 60000; // Auto refresh 60s, thay 0 nếu không muốn
+
+async function loadDriveImages() {
+  const url = `https://www.googleapis.com/drive/v3/files?q='${FOLDER_ID}'+in+parents+and+mimeType contains 'image/'&key=${API_KEY}&fields=files(id,name)`;
+
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!data.files) return;
+
+    const grid = document.getElementById("grid");
+    grid.innerHTML = data.files.map(file => {
+     const imgUrl = `https://drive.google.com/uc?export=view&id=${file.id}`;
+      return `
+        <div class="grid-item bg-white rounded shadow overflow-hidden">
+          <img src="${imgUrl}" alt="${file.name}" class="w-full h-48 object-cover" onclick="showLightbox('${imgUrl}')">
+          <div class="p-2 text-center text-sm">${file.name}</div>
+        </div>
+      `;
+    }).join("");
+  } catch (err) {
+    console.error("Error loading images:", err);
+  }
+}
+
+
+// Lightbox
+function showLightbox(url){
+  const lb = document.getElementById('lightbox');
+  const lbImg = document.getElementById('lightbox-img');
+  lbImg.src = url;
+  lb.style.display = 'flex';
+}
+
+// Load initially
+loadDriveImages();
+
+// Auto refresh
+if(REFRESH_INTERVAL > 0){
+  setInterval(loadDriveImages, REFRESH_INTERVAL);
+}
+</script>
+
+</body>
+</html>
