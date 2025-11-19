@@ -11,6 +11,7 @@
         :root {
             --primary-color: #EA4335; /* Google Red */
             --secondary-color: #4285F4; /* Google Blue */
+            --refresh-color: #34A853; /* Google Green */
         }
         body {
             font-family: 'Inter', sans-serif;
@@ -92,17 +93,50 @@
             cursor: pointer;
             line-height: 1;
         }
+        .refresh-button {
+            background-color: var(--refresh-color);
+            transition: background-color 0.2s;
+        }
+        .refresh-button:hover:not(:disabled) {
+            background-color: #2c9747;
+        }
+        .refresh-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .pagination-button {
+            background-color: var(--secondary-color);
+            transition: background-color 0.2s;
+        }
+        .pagination-button:hover:not(:disabled) {
+            background-color: #3c78e3;
+        }
+        .pagination-button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
     </style>
 </head>
 <body class="p-4 md:p-8 flex items-start justify-center">
 
-    <!-- KHU VỰC HIỂN THỊ CHÍNH (Chỉ giữ lại resultContainer, đã được làm sạch) -->
+    <!-- KHU VỰC HIỂN THỊ CHÍNH -->
     <div id="resultContainer" class="w-full max-w-4xl p-0 md:p-0">
         
-        <!-- Khu vực Trạng thái tải (Đã di chuyển lên trên và sửa đổi để tự hiển thị) -->
-        <div id="loadingStatus" class="flex items-center justify-center p-2 rounded-lg bg-gray-100 mb-4 mx-auto w-full max-w-sm">
-            <div id="loadingSpinner" class="loading-spinner mr-3"></div>
-            <span id="buttonText" class="text-gray-700 font-medium">Đang tải nội dung...</span>
+        <!-- Khu vực Trạng thái và Nút Refresh -->
+        <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-3">
+            <!-- Nút Refresh -->
+            <button id="refreshButton" class="refresh-button text-white font-bold py-2 px-4 rounded-lg w-full sm:w-auto shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-[var(--refresh-color)] focus:ring-opacity-50">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 inline mr-2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181-3.181m1.479 9.348l3.181-3.181m0-2.288l4.243-4.243m-8.484 0L3.06 14.69M4.318 6.318A7.74 7.74 0 0110.23 3.784c5.008-.617 9.497 1.84 11.44 6.953m-13.483 1.077H13.8V9.75M6.51 17.653l-.86-2.58A7.74 7.74 0 0113.77 20.216c5.008.617 9.497-1.84 11.44-6.953" />
+                </svg>
+                Làm Mới
+            </button>
+            
+            <!-- Trạng thái tải -->
+            <div id="loadingStatus" class="flex items-center justify-center p-2 rounded-lg bg-gray-100 w-full sm:w-auto">
+                <div id="loadingSpinner" class="loading-spinner mr-3 hidden"></div>
+                <span id="buttonText" class="text-gray-700 font-medium">Sẵn sàng.</span>
+            </div>
         </div>
 
         <h2 class="text-xl font-semibold mb-4 text-gray-700">Hình ảnh và Video:</h2>
@@ -111,6 +145,21 @@
         <div id="fileGrid" 
              class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
             <!-- Nội dung file sẽ được chèn vào đây bởi JavaScript -->
+        </div>
+
+        <!-- Khu vực Phân trang -->
+        <div id="paginationControls" class="flex justify-center items-center mt-6 p-4 rounded-lg bg-white shadow-inner border border-gray-200 hidden">
+            <button id="prevButton" onclick="prevPage()" class="pagination-button text-white font-semibold py-2 px-4 rounded-l-lg disabled:opacity-50">
+                Trang Trước
+            </button>
+            
+            <span id="pageInfo" class="mx-4 text-gray-700 font-medium w-32 text-center">
+                Trang 1 / 1
+            </span>
+
+            <button id="nextButton" onclick="nextPage()" class="pagination-button text-white font-semibold py-2 px-4 rounded-r-lg disabled:opacity-50">
+                Trang Sau
+            </button>
         </div>
         
         <p id="errorFeedback" class="text-red-500 mt-4 hidden text-center font-medium"></p>
@@ -139,16 +188,27 @@
         // Thiết lập API Key. BẠN CẦN THAY THẾ CHUỖI NÀY BẰNG API KEY THỰC TẾ CỦA MÌNH.
         const GOOGLE_DRIVE_API_KEY = "AIzaSyC8DDxSNLSupebbcxEitkt279pvHj2ugzA";
         
-        // Thời gian chờ giữa các lần tải lại (20 giây)
-        const RELOAD_INTERVAL_MS = 20000; 
-        let isProcessing = false; // Biến cờ để ngăn tải đè
+        // Cấu hình Phân trang và Tải lại
+        const RELOAD_INTERVAL_MS = 10000; // 20 giây
+        const FILES_PER_PAGE = 8; // Số file hiển thị trên mỗi trang
+
+        // Biến trạng thái
+        let isProcessing = false; 
+        let currentPage = 1;
+        let allFiles = []; // Mảng chứa tất cả các file đã tải
 
         // Các phần tử DOM
         const buttonText = document.getElementById('buttonText'); 
         const loadingSpinner = document.getElementById('loadingSpinner'); 
-        const resultContainer = document.getElementById('resultContainer');
         const fileGrid = document.getElementById('fileGrid');
         const errorFeedback = document.getElementById('errorFeedback');
+        const refreshButton = document.getElementById('refreshButton');
+        
+        // Phần tử Phân trang
+        const paginationControls = document.getElementById('paginationControls');
+        const prevButton = document.getElementById('prevButton');
+        const nextButton = document.getElementById('nextButton');
+        const pageInfo = document.getElementById('pageInfo');
         
         // Modal DOM Elements
         const previewModal = document.getElementById('previewModal');
@@ -161,15 +221,14 @@
          * @param {string} message - Thông báo lỗi.
          */
         function displayError(message) {
-            // resultContainer không còn bị ẩn, nên chỉ cần cập nhật feedback
             errorFeedback.textContent = message;
             errorFeedback.classList.remove('hidden');
-            fileGrid.innerHTML = ''; // Xóa grid cũ
+            fileGrid.innerHTML = ''; 
         }
 
         /**
-         * Hiển thị trạng thái tải
-         * @param {boolean} isLoading - True để hiển thị, False để ẩn
+         * Hiển thị trạng thái tải.
+         * @param {boolean} isLoading - True để hiển thị, False để ẩn.
          */
         function setLoadingState(isLoading) {
             const loadingStatusDiv = document.getElementById('loadingStatus');
@@ -178,9 +237,71 @@
                 loadingStatusDiv.classList.remove('hidden');
                 buttonText.textContent = 'Đang tải nội dung...';
                 loadingSpinner.classList.remove('hidden');
+                refreshButton.disabled = true;
             } else {
                 loadingStatusDiv.classList.add('hidden');
+                buttonText.textContent = 'Sẵn sàng.';
+                loadingSpinner.classList.add('hidden');
+                refreshButton.disabled = false;
             }
+        }
+        
+        /**
+         * Cập nhật giao diện phân trang.
+         */
+        function setupPagination() {
+            const totalPages = Math.ceil(allFiles.length / FILES_PER_PAGE);
+            const hasFiles = allFiles.length > 0;
+
+            if (hasFiles) {
+                pageInfo.textContent = `Trang ${currentPage} / ${totalPages}`;
+                prevButton.disabled = currentPage === 1;
+                nextButton.disabled = currentPage === totalPages;
+                paginationControls.classList.remove('hidden');
+            } else {
+                pageInfo.textContent = '0 file media.';
+                prevButton.disabled = true;
+                nextButton.disabled = true;
+                paginationControls.classList.add('hidden');
+            }
+        }
+
+        /**
+         * Chuyển đến trang tiếp theo.
+         */
+        window.nextPage = function() {
+            const totalPages = Math.ceil(allFiles.length / FILES_PER_PAGE);
+            if (currentPage < totalPages) {
+                currentPage++;
+                renderFiles();
+            }
+        }
+
+        /**
+         * Chuyển về trang trước.
+         */
+        window.prevPage = function() {
+            if (currentPage > 1) {
+                currentPage--;
+                renderFiles();
+            }
+        }
+
+        /**
+         * Render các file trong trang hiện tại.
+         */
+        function renderFiles() {
+            // Tính toán vị trí slice
+            const startIndex = (currentPage - 1) * FILES_PER_PAGE;
+            const endIndex = startIndex + FILES_PER_PAGE;
+            const filesToDisplay = allFiles.slice(startIndex, endIndex);
+
+            // Xóa và Render
+            fileGrid.innerHTML = '';
+            filesToDisplay.forEach(displayFile);
+
+            // Cập nhật UI phân trang
+            setupPagination();
         }
 
         /**
@@ -190,13 +311,11 @@
          * @returns {Array} - Mảng chứa thông tin các file.
          */
         async function fetchFolderContents(folderId, apiKey) {
-            // Kiểm tra API Key (vì đã loại bỏ cảnh báo, nên kiểm tra logic này vẫn quan trọng)
             if (apiKey === "YOUR_GOOGLE_DRIVE_API_KEY_HERE" || !apiKey) {
                 displayError("Lỗi: Vui lòng thay 'YOUR_GOOGLE_DRIVE_API_KEY_HERE' bằng Google Drive API Key thực tế để truy cập file.");
                 return null;
             }
 
-            // Tham số truy vấn: q='folderId' in parents AND trashed=false
             const apiUrl = `https://www.googleapis.com/drive/v3/files?q='${folderId}' in parents and trashed=false&fields=files(id,name,mimeType)&key=${apiKey}&pageSize=100`;
             
             try {
@@ -281,12 +400,10 @@
         function displayFile(file) {
             const isImageOrVideo = file.mimeType.startsWith('image/') || file.mimeType.startsWith('video/');
 
-            // LỌC: Chỉ tiếp tục nếu là Hình ảnh hoặc Video
             if (!isImageOrVideo) {
                 return;
             }
             
-            // Logic hiển thị chỉ dành cho Media (Image/Video)
             const thumbnailSrc = `https://drive.google.com/thumbnail?id=${file.id}&sz=w150-h150-p`;
 
             const imgElement = document.createElement('img');
@@ -294,7 +411,6 @@
             imgElement.alt = file.name;
             imgElement.classList.add('w-full', 'h-24', 'object-cover', 'rounded-lg', 'mx-auto', 'border', 'border-gray-200');
             
-            // Xử lý khi thumbnail không tải được (thường xảy ra với video)
             imgElement.onerror = () => {
                 const mediaType = file.mimeType.startsWith('image/') ? 'Ảnh' : 'Video';
                 imgElement.outerHTML = `<div class="placeholder h-24 rounded-lg">File ${mediaType}</div>`;
@@ -315,9 +431,7 @@
             nameElement.classList.add('text-sm', 'font-medium', 'text-gray-800', 'truncate', 'mt-auto');
             fileItem.appendChild(nameElement);
 
-            // Xử lý sự kiện click
             fileItem.onclick = () => {
-                // Mở Preview Modal 
                 openPreview(file.id, file.mimeType, file.name);
             };
 
@@ -328,47 +442,55 @@
          * Xử lý khi ứng dụng tự động tải nội dung thư mục.
          * @param {string} folderId - ID thư mục Google Drive đã cấu hình sẵn.
          */
-        async function handleProcess(folderId) {
-            if (isProcessing) return; // Ngăn chặn tải lại nếu đang trong quá trình tải trước đó
+        async function handleProcess(folderId, resetPage = true) {
+            if (isProcessing) return; 
             isProcessing = true;
             
-            fileGrid.innerHTML = '';
             errorFeedback.classList.add('hidden');
-
             setLoadingState(true);
             
-            // Thêm độ trễ nhỏ để spinner hiển thị rõ ràng hơn trong quá trình tải lại nhanh
             await new Promise(resolve => setTimeout(resolve, 300)); 
 
             const files = await fetchFolderContents(folderId, GOOGLE_DRIVE_API_KEY);
 
+            if (files !== null) {
+                // Lọc chỉ giữ lại file media
+                allFiles = files.filter(file => file.mimeType.startsWith('image/') || file.mimeType.startsWith('video/'));
+
+                if (resetPage) {
+                    currentPage = 1; // Luôn quay về trang 1 khi tải lại toàn bộ dữ liệu
+                }
+                
+                if (allFiles.length > 0) {
+                    renderFiles();
+                } else {
+                    fileGrid.innerHTML = '';
+                    displayError('Thư mục không chứa bất kỳ file ảnh hoặc video nào được chia sẻ công khai.');
+                    setupPagination(); // Cập nhật UI phân trang (ẩn đi)
+                }
+            } else {
+                allFiles = [];
+                setupPagination(); // Cập nhật UI phân trang (ẩn đi)
+            }
+
             setLoadingState(false);
             isProcessing = false;
-
-            if (files && files.length > 0) {
-                errorFeedback.classList.add('hidden');
-                files.forEach(displayFile);
-
-                // Nếu không có file media nào được tìm thấy sau khi lọc
-                if (fileGrid.children.length === 0) {
-                    displayError('Thư mục không chứa bất kỳ file ảnh hoặc video nào được chia sẻ công khai.');
-                }
-            } else if (files !== null) {
-                // Nếu fetchFolderContents trả về null (lỗi API/Key)
-                // Lỗi đã được hiển thị bên trong fetchFolderContents
-                if (errorFeedback.classList.contains('hidden')) {
-                     displayError('Không tìm thấy file nào được chia sẻ công khai trong thư mục.');
-                }
-            }
         }
         
+        // Gắn sự kiện cho nút Refresh
+        refreshButton.addEventListener('click', () => {
+            console.log("Làm mới thủ công...");
+            handleProcess(HARDCODED_FOLDER_ID, true); // true để reset về trang 1
+        });
+
         // 1. Tự động chạy khi tải trang lần đầu
-        handleProcess(HARDCODED_FOLDER_ID);
+        handleProcess(HARDCODED_FOLDER_ID, true);
         
-        // 2. Thiết lập hẹn giờ để tải lại sau mỗi 20 giây
+        // 2. Thiết lập hẹn giờ để tải lại sau mỗi 20 giây (không reset trang nếu người dùng đang xem trang > 1)
         setInterval(() => {
             console.log(`Tự động tải lại nội dung Drive sau ${RELOAD_INTERVAL_MS / 1000} giây...`);
-            handleProcess(HARDCODED_FOLDER_ID);
+            // Giữ nguyên trang hiện tại, chỉ thay đổi nội dung nếu có file mới
+            handleProcess(HARDCODED_FOLDER_ID, false); 
         }, RELOAD_INTERVAL_MS);
 
 
