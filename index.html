@@ -185,11 +185,11 @@
     <div id="previewModal" class="modal-overlay hidden" onclick="closeModal(event)">
         <div id="modalContentWrapper" class="modal-content-wrapper">
             <!-- Nút Tải Xuống (chỉ hiển thị cho ảnh) -->
-            <a id="downloadButton" href="#" download class="hidden text-white p-1 rounded-full hover:text-gray-300 transition-colors" title="Tải xuống ảnh này">
+            <!-- <a id="downloadButton" href="#" download class="hidden text-white p-1 rounded-full hover:text-gray-300 transition-colors" title="Tải xuống ảnh này">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
                 </svg>
-            </a>
+            </a> -->
             <button class="close-button" onclick="closeModal(event)">&times;</button>
             <div id="previewContent" class="h-full w-full">
                 <!-- Nội dung xem trước (Ảnh hoặc Iframe Video) -->
@@ -236,7 +236,7 @@
         const previewModal = document.getElementById('previewModal');
         const previewContent = document.getElementById('previewContent');
         const modalContentWrapper = document.getElementById('modalContentWrapper');
-        const downloadButton = document.getElementById('downloadButton'); // Nút Tải xuống
+        // const downloadButton = document.getElementById('downloadButton'); // Nút Tải xuống
 
         /**
          * Hiển thị thông báo lỗi.
@@ -376,7 +376,7 @@
             modalContentWrapper.style.height = 'auto'; 
             
             // Ẩn nút download mặc định
-            downloadButton.classList.add('hidden');
+            // downloadButton.classList.add('hidden');
 
             let contentHTML = '';
             const isImage = mimeType.startsWith('image/');
@@ -391,10 +391,10 @@
                 modalContentWrapper.style.height = '90vh';
                 
                 // Hiển thị và cấu hình nút download cho ảnh
-                const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
-                downloadButton.href = downloadUrl;
-                downloadButton.download = fileName; // Gợi ý tên file khi tải về
-                downloadButton.classList.remove('hidden');
+                // const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+                // downloadButton.href = downloadUrl;
+                // downloadButton.download = fileName; // Gợi ý tên file khi tải về
+                // downloadButton.classList.remove('hidden');
 
             } else if (isVideo) {
                 const embedUrl = `https://drive.google.com/file/d/${fileId}/preview`;
@@ -426,7 +426,7 @@
             previewModal.classList.add('hidden');
             document.body.classList.remove('overflow-hidden');
             previewContent.innerHTML = ''; 
-            downloadButton.classList.add('hidden'); // Đảm bảo nút download bị ẩn khi đóng
+            // downloadButton.classList.add('hidden'); // Đảm bảo nút download bị ẩn khi đóng
         }
         
         /**
