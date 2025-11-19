@@ -93,6 +93,22 @@
             cursor: pointer;
             line-height: 1;
         }
+        /* Nút Tải xuống trong Modal */
+        #downloadButton {
+            position: absolute;
+            top: -30px;
+            right: 48px; /* Dịch sang trái 48px để không trùng Close button */
+            color: white;
+            font-size: 2rem;
+            padding: 4px;
+            border-radius: 50%;
+            transition: color 0.2s, transform 0.2s;
+            line-height: 1;
+        }
+        #downloadButton:hover {
+            color: #ccc;
+            transform: scale(1.1);
+        }
         .refresh-button {
             background-color: var(--refresh-color);
             transition: background-color 0.2s;
@@ -168,6 +184,12 @@
     <!-- Modal Xem trước (Lightbox) -->
     <div id="previewModal" class="modal-overlay hidden" onclick="closeModal(event)">
         <div id="modalContentWrapper" class="modal-content-wrapper">
+            <!-- Nút Tải Xuống (chỉ hiển thị cho ảnh) -->
+            <a id="downloadButton" href="#" download class="hidden text-white p-1 rounded-full hover:text-gray-300 transition-colors" title="Tải xuống ảnh này">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                </svg>
+            </a>
             <button class="close-button" onclick="closeModal(event)">&times;</button>
             <div id="previewContent" class="h-full w-full">
                 <!-- Nội dung xem trước (Ảnh hoặc Iframe Video) -->
@@ -189,7 +211,7 @@
         const GOOGLE_DRIVE_API_KEY = "AIzaSyC8DDxSNLSupebbcxEitkt279pvHj2ugzA";
         
         // Cấu hình Phân trang và Tải lại
-        const RELOAD_INTERVAL_MS = 10000; // 20 giây
+        const RELOAD_INTERVAL_MS = 20000; // 20 giây
         const FILES_PER_PAGE = 8; // Số file hiển thị trên mỗi trang
 
         // Biến trạng thái
@@ -214,7 +236,7 @@
         const previewModal = document.getElementById('previewModal');
         const previewContent = document.getElementById('previewContent');
         const modalContentWrapper = document.getElementById('modalContentWrapper');
-
+        const downloadButton = document.getElementById('downloadButton'); // Nút Tải xuống
 
         /**
          * Hiển thị thông báo lỗi.
@@ -316,7 +338,8 @@
                 return null;
             }
 
-            const apiUrl = `https://www.googleapis.com/drive/v3/files?q='${folderId}' in parents and trashed=false&fields=files(id,name,mimeType)&key=${apiKey}&pageSize=100`;
+            // Thêm tham số orderBy=createdTime desc để sắp xếp theo thời gian tạo (upload) giảm dần
+            const apiUrl = `https://www.googleapis.com/drive/v3/files?q='${folderId}' in parents and trashed=false&fields=files(id,name,mimeType)&key=${apiKey}&pageSize=100&orderBy=createdTime desc`;
             
             try {
                 const response = await fetch(apiUrl);
@@ -351,6 +374,9 @@
             previewContent.innerHTML = '';
             modalContentWrapper.style.width = 'auto'; 
             modalContentWrapper.style.height = 'auto'; 
+            
+            // Ẩn nút download mặc định
+            downloadButton.classList.add('hidden');
 
             let contentHTML = '';
             const isImage = mimeType.startsWith('image/');
@@ -358,13 +384,21 @@
 
             if (isImage) {
                 const embedUrl = `https://drive.google.com/file/d/${fileId}/preview`;
+                // Dùng iframe để xem trước ảnh
                 contentHTML = `<iframe src="${embedUrl}" width="100%" height="100%" frameborder="0" allowfullscreen class="rounded-lg shadow-2xl"></iframe>`;
                 
                 modalContentWrapper.style.width = '90vw'; 
                 modalContentWrapper.style.height = '90vh';
                 
+                // Hiển thị và cấu hình nút download cho ảnh
+                const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+                downloadButton.href = downloadUrl;
+                downloadButton.download = fileName; // Gợi ý tên file khi tải về
+                downloadButton.classList.remove('hidden');
+
             } else if (isVideo) {
                 const embedUrl = `https://drive.google.com/file/d/${fileId}/preview`;
+                // Dùng iframe để xem trước video
                 contentHTML = `<iframe src="${embedUrl}" width="800" height="450" allow="autoplay" frameborder="0" allowfullscreen class="rounded-lg shadow-2xl"></iframe>`;
                 modalContentWrapper.style.width = '800px';
                 modalContentWrapper.style.height = '450px';
@@ -385,12 +419,14 @@
          * Đóng modal xem trước.
          */
         window.closeModal = function(event) {
+            // Kiểm tra để chỉ đóng khi click vào overlay hoặc nút đóng
             if (event && event.target !== previewModal && event.target.className !== 'close-button') {
-                if (event.target.closest('#modalContentWrapper') && event.target !== previewModal) return;
+                if (event.target.closest('#modalContentWrapper') && event.target !== previewModal && event.target !== downloadButton) return;
             }
             previewModal.classList.add('hidden');
             document.body.classList.remove('overflow-hidden');
             previewContent.innerHTML = ''; 
+            downloadButton.classList.add('hidden'); // Đảm bảo nút download bị ẩn khi đóng
         }
         
         /**
