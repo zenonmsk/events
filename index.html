@@ -1,93 +1,315 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Google Drive Image Grid</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<style>
-  body { background-color: #f3f4f6; }
-  .grid-item img {
-    cursor: pointer;
-    transition: transform 0.2s;
-  }
-  .grid-item img:hover {
-    transform: scale(1.05);
-  }
-  /* Lightbox */
-  #lightbox {
-    display: none;
-    position: fixed;
-    top:0; left:0;
-    width:100%; height:100%;
-    background: rgba(0,0,0,0.8);
-    justify-content:center;
-    align-items:center;
-    z-index:1000;
-  }
-  #lightbox img {
-    max-width: 90%;
-    max-height: 90%;
-    border-radius: 8px;
-  }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trình Xem Thư Mục Google Drive Công Khai</title>
+    <!-- Tải Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Cấu hình Font và giao diện chung -->
+    <style>
+        :root {
+            --primary-color: #EA4335; /* Google Red */
+            --secondary-color: #4285F4; /* Google Blue */
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f7f7;
+            min-height: 100vh;
+        }
+        .container-card {
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+        .file-box {
+            transition: all 0.2s ease;
+            cursor: pointer;
+            min-height: 150px;
+        }
+        .file-box:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            border-color: var(--secondary-color);
+        }
+        .placeholder {
+            background-color: #f0f0f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #666;
+            font-size: 0.875rem;
+            text-align: center;
+            height: 100px;
+        }
+        .loading-spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-top: 4px solid var(--secondary-color);
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
 </head>
-<body class="p-4">
+<body class="p-4 md:p-8 flex items-start justify-center">
 
-<h1 class="text-2xl font-bold mb-4 text-center">Google Drive Image Grid</h1>
+    <!-- Thẻ chứa chính (Main Container Card) -->
+    <div class="container-card w-full max-w-4xl bg-white rounded-xl p-6 md:p-10 mt-10">
+        <h1 class="text-3xl font-bold text-center mb-6 text-[var(--primary-color)]">
+            Trình Xem Thư Mục Google Drive Công Khai
+        </h1>
+        <p class="text-center text-gray-600 mb-8">
+            Nhập liên kết chia sẻ công khai (Public Viewer) của thư mục từ Google Drive.
+        </p>
 
-<div id="grid" class="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"></div>
-
-<!-- Lightbox -->
-<div id="lightbox" onclick="this.style.display='none'">
-  <img id="lightbox-img" src="" alt="Preview">
-</div>
-
-<script>
-const FOLDER_ID = "1G4B_lmSb4fb3kSMPHPyKPwa3uty9xkiD";  // Thay bằng Folder ID
-const API_KEY = "AIzaSyC8DDxSNLSupebbcxEitkt279pvHj2ugzA";      // Thay bằng API Key
-const REFRESH_INTERVAL = 60000; // Auto refresh 60s, thay 0 nếu không muốn
-
-async function loadDriveImages() {
-  const url = `https://www.googleapis.com/drive/v3/files?q='${FOLDER_ID}'+in+parents+and+mimeType contains 'image/'&key=${API_KEY}&fields=files(id,name)`;
-
-  try {
-    const res = await fetch(url);
-    const data = await res.json();
-    if (!data.files) return;
-
-    const grid = document.getElementById("grid");
-    grid.innerHTML = data.files.map(file => {
-     const imgUrl = `https://drive.google.com/uc?export=view&id=${file.id}`;
-      return `
-        <div class="grid-item bg-white rounded shadow overflow-hidden">
-          <img src="${imgUrl}" alt="${file.name}" class="w-full h-48 object-cover" onclick="showLightbox('${imgUrl}')">
-          <div class="p-2 text-center text-sm">${file.name}</div>
+        <!-- Khu vực Nhập liệu -->
+        <div class="space-y-4">
+            <input type="text" id="driveUrlInput" placeholder="Dán link Google Drive Folder (ví dụ: https://drive.google.com/drive/folders/FOLDER_ID)"
+                   class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--secondary-color)] focus:border-[var(--secondary-color)]">
+            
+            <button id="processButton"
+                    class="w-full bg-[var(--secondary-color)] text-white font-semibold py-3 rounded-lg hover:bg-opacity-90 transition duration-150 shadow-md flex items-center justify-center">
+                <span id="buttonText">Lấy Nội Dung Thư Mục</span>
+                <div id="loadingSpinner" class="loading-spinner ml-3 hidden"></div>
+            </button>
         </div>
-      `;
-    }).join("");
-  } catch (err) {
-    console.error("Error loading images:", err);
-  }
-}
 
+        <!-- Khu vực Hiển thị Kết quả -->
+        <div id="resultContainer" class="mt-10 hidden">
+            <h2 class="text-xl font-semibold mb-4 text-gray-700">Các File trong Thư mục:</h2>
+            
+            <p id="apiKeyWarning" class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4 rounded-md text-sm">
+                ⚠️ **Cần API Key:** Bạn phải thay `YOUR_GOOGLE_DRIVE_API_KEY_HERE` trong mã JS bằng Google Drive API Key thực tế của bạn để chức năng này hoạt động.
+            </p>
 
-// Lightbox
-function showLightbox(url){
-  const lb = document.getElementById('lightbox');
-  const lbImg = document.getElementById('lightbox-img');
-  lbImg.src = url;
-  lb.style.display = 'flex';
-}
+            <div id="fileGrid" 
+                 class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                <!-- Nội dung file sẽ được chèn vào đây bởi JavaScript -->
+            </div>
+            
+            <p id="errorFeedback" class="text-red-500 mt-4 hidden text-center font-medium"></p>
+        </div>
 
-// Load initially
-loadDriveImages();
+    </div>
 
-// Auto refresh
-if(REFRESH_INTERVAL > 0){
-  setInterval(loadDriveImages, REFRESH_INTERVAL);
-}
-</script>
+    <!-- Logic JavaScript -->
+    <script type="module">
+        // Khai báo biến toàn cục (Global variables required by the environment)
+        // Lưu ý: Các biến này không được sử dụng ở đây nhưng cần thiết cho môi trường
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
+        // Thiết lập API Key. BẠN CẦN THAY THẾ CHUỖI NÀY BẰNG API KEY THỰC TẾ CỦA MÌNH.
+        const GOOGLE_DRIVE_API_KEY = "AIzaSyC8DDxSNLSupebbcxEitkt279pvHj2ugzA";
+
+        // Các phần tử DOM
+        const driveUrlInput = document.getElementById('driveUrlInput');
+        const processButton = document.getElementById('processButton');
+        const buttonText = document.getElementById('buttonText');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+        const resultContainer = document.getElementById('resultContainer');
+        const fileGrid = document.getElementById('fileGrid');
+        const errorFeedback = document.getElementById('errorFeedback');
+        const apiKeyWarning = document.getElementById('apiKeyWarning');
+
+        /**
+         * Trích xuất ID từ URL Google Drive (hợp lệ cho cả File và Folder).
+         * @param {string} url - URL Google Drive
+         * @returns {string|null} - ID File/Folder hoặc null nếu không tìm thấy
+         */
+        function extractId(url) {
+            // Regex tìm chuỗi ID dài (thường là 25-40 ký tự)
+            const regex = /[-\w]{25,}/; 
+            const match = url.match(regex);
+            
+            if (match) {
+                return match[0];
+            }
+            return null;
+        }
+
+        /**
+         * Hiển thị thông báo lỗi.
+         * @param {string} message - Thông báo lỗi.
+         */
+        function displayError(message) {
+            resultContainer.classList.remove('hidden');
+            errorFeedback.textContent = message;
+            errorFeedback.classList.remove('hidden');
+            fileGrid.innerHTML = ''; // Xóa grid cũ
+        }
+
+        /**
+         * Hiển thị trạng thái tải
+         * @param {boolean} isLoading - True để hiển thị, False để ẩn
+         */
+        function setLoadingState(isLoading) {
+            processButton.disabled = isLoading;
+            if (isLoading) {
+                buttonText.textContent = 'Đang tải...';
+                loadingSpinner.classList.remove('hidden');
+            } else {
+                buttonText.textContent = 'Lấy Nội Dung Thư Mục';
+                loadingSpinner.classList.add('hidden');
+            }
+        }
+
+        /**
+         * Thực hiện lệnh gọi Google Drive API để lấy danh sách file trong thư mục.
+         * @param {string} folderId - ID của thư mục Google Drive.
+         * @param {string} apiKey - Google Drive API Key.
+         * @returns {Array} - Mảng chứa thông tin các file.
+         */
+        async function fetchFolderContents(folderId, apiKey) {
+            if (apiKey === "YOUR_GOOGLE_DRIVE_API_KEY_HERE" || !apiKey) {
+                displayError("Lỗi: Vui lòng thay 'YOUR_GOOGLE_DRIVE_API_KEY_HERE' bằng Google Drive API Key thực tế.");
+                return null;
+            }
+
+            // Tham số truy vấn:
+            // q='folderId' in parents AND trashed=false (Chỉ lấy file trong folder này và không bị xóa)
+            // fields=files(id, name, mimeType) (Chỉ lấy các trường cần thiết)
+            // pageSize=100 (Số lượng file tối đa, có thể cần phân trang nếu thư mục quá lớn)
+            const apiUrl = `https://www.googleapis.com/drive/v3/files?q='${folderId}' in parents and trashed=false&fields=files(id,name,mimeType)&key=${apiKey}&pageSize=100`;
+            
+            try {
+                const response = await fetch(apiUrl);
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    let errorMessage = `Lỗi API (${response.status}).`;
+                    if (errorData.error && errorData.error.message) {
+                        errorMessage += ` Chi tiết: ${errorData.error.message}.`;
+                    }
+                    // Thường lỗi 403 (Permission Denied) nếu folder không công khai hoặc API Key sai
+                    displayError(errorMessage + " Đảm bảo folder công khai và API Key hợp lệ.");
+                    return null;
+                }
+
+                const data = await response.json();
+                return data.files || [];
+
+            } catch (error) {
+                console.error("Lỗi kết nối mạng:", error);
+                displayError('Lỗi kết nối mạng hoặc truy vấn API thất bại.');
+                return null;
+            }
+        }
+        
+        /**
+         * Tạo và hiển thị một ô file (thumbnail) trong lưới.
+         * @param {Object} file - Đối tượng file từ API.
+         */
+        function displayFile(file) {
+            // Mặc định cho file không phải ảnh/video hoặc khi không có thumbnail
+            let thumbnailContent;
+            const fileViewUrl = `https://drive.google.com/file/d/${file.id}/view`;
+            const isImageOrVideo = file.mimeType.startsWith('image/') || file.mimeType.startsWith('video/');
+
+            if (isImageOrVideo) {
+                // Sử dụng thumbnail API cho ảnh/video
+                const thumbnailSrc = `https://drive.google.com/thumbnail?id=${file.id}&sz=w150-h150-p`;
+
+                const imgElement = document.createElement('img');
+                imgElement.src = thumbnailSrc;
+                imgElement.alt = file.name;
+                imgElement.classList.add('w-full', 'h-24', 'object-cover', 'rounded-lg', 'mx-auto', 'border', 'border-gray-200');
+                
+                // Fallback nếu thumbnail không tải được (ví dụ: file video lớn)
+                imgElement.onerror = () => {
+                    imgElement.outerHTML = `<div class="placeholder h-24 rounded-lg">File đa phương tiện</div>`;
+                };
+                thumbnailContent = imgElement;
+            } else {
+                // Icon placeholder cho các loại file khác (ví dụ: tài liệu, zip)
+                const icon = file.mimeType.includes('pdf') ? '📄' : 
+                             file.mimeType.includes('document') ? '📝' : 
+                             file.mimeType.includes('spreadsheet') ? '📊' : 
+                             file.mimeType.includes('folder') ? '📁' : '📦';
+                
+                thumbnailContent = document.createElement('div');
+                thumbnailContent.classList.add('placeholder', 'h-24', 'rounded-lg');
+                thumbnailContent.innerHTML = `<span class="text-3xl">${icon}</span><br><span class="text-xs">(${file.mimeType.split('/').pop()})</span>`;
+            }
+
+            // Tạo container cho mỗi file
+            const fileItem = document.createElement('div');
+            fileItem.classList.add('file-box', 'bg-white', 'border', 'border-gray-300', 'rounded-xl', 'p-2', 'text-center', 'flex', 'flex-col', 'justify-between');
+            
+            // Container cho thumbnail/icon
+            const thumbnailWrapper = document.createElement('div');
+            thumbnailWrapper.classList.add('mb-2');
+            thumbnailWrapper.appendChild(thumbnailContent);
+            fileItem.appendChild(thumbnailWrapper);
+
+            // Tên file
+            const nameElement = document.createElement('p');
+            nameElement.textContent = file.name;
+            nameElement.classList.add('text-sm', 'font-medium', 'text-gray-800', 'truncate', 'mt-auto');
+            fileItem.appendChild(nameElement);
+
+            // Sự kiện click: mở file trên tab hiện tại
+            fileItem.onclick = () => {
+                window.location.href = fileViewUrl;
+            };
+
+            fileGrid.appendChild(fileItem);
+        }
+
+        /**
+         * Xử lý khi người dùng nhấp vào nút "Lấy Nội Dung Thư Mục".
+         */
+        async function handleProcess() {
+            const url = driveUrlInput.value.trim();
+            fileGrid.innerHTML = '';
+            errorFeedback.classList.add('hidden');
+            resultContainer.classList.add('hidden');
+            apiKeyWarning.classList.remove('hidden'); // Luôn hiển thị cảnh báo API Key
+
+            if (!url) {
+                displayError('Vui lòng nhập một liên kết Google Drive Folder.');
+                return;
+            }
+
+            const folderId = extractId(url);
+
+            if (!folderId) {
+                displayError('Không tìm thấy ID thư mục hợp lệ trong liên kết. Vui lòng kiểm tra lại liên kết chia sẻ.');
+                return;
+            }
+
+            setLoadingState(true);
+            resultContainer.classList.remove('hidden');
+
+            const files = await fetchFolderContents(folderId, GOOGLE_DRIVE_API_KEY);
+
+            setLoadingState(false);
+
+            if (files && files.length > 0) {
+                // Ẩn thông báo lỗi nếu thành công
+                errorFeedback.classList.add('hidden');
+                
+                // Lặp qua danh sách file và hiển thị
+                files.forEach(displayFile);
+            } else if (files !== null) {
+                // Nếu fetchFolderContents trả về mảng rỗng (khác null)
+                displayError('Thư mục rỗng hoặc không tìm thấy file nào được chia sẻ công khai.');
+            }
+        }
+
+        // Gán sự kiện cho nút
+        processButton.addEventListener('click', handleProcess);
+
+        // Cho phép nhấn Enter trong ô input để xử lý
+        driveUrlInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                handleProcess();
+            }
+        });
+    </script>
 </body>
 </html>
