@@ -138,6 +138,10 @@
 
         // Thiết lập API Key. BẠN CẦN THAY THẾ CHUỖI NÀY BẰNG API KEY THỰC TẾ CỦA MÌNH.
         const GOOGLE_DRIVE_API_KEY = "AIzaSyC8DDxSNLSupebbcxEitkt279pvHj2ugzA";
+        
+        // Thời gian chờ giữa các lần tải lại (20 giây)
+        const RELOAD_INTERVAL_MS = 20000; 
+        let isProcessing = false; // Biến cờ để ngăn tải đè
 
         // Các phần tử DOM
         const buttonText = document.getElementById('buttonText'); 
@@ -145,7 +149,6 @@
         const resultContainer = document.getElementById('resultContainer');
         const fileGrid = document.getElementById('fileGrid');
         const errorFeedback = document.getElementById('errorFeedback');
-        // apiKeyWarning đã bị loại bỏ
         
         // Modal DOM Elements
         const previewModal = document.getElementById('previewModal');
@@ -326,16 +329,21 @@
          * @param {string} folderId - ID thư mục Google Drive đã cấu hình sẵn.
          */
         async function handleProcess(folderId) {
+            if (isProcessing) return; // Ngăn chặn tải lại nếu đang trong quá trình tải trước đó
+            isProcessing = true;
+            
             fileGrid.innerHTML = '';
             errorFeedback.classList.add('hidden');
 
-            // Do resultContainer không còn class 'hidden' ban đầu, không cần loại bỏ nó nữa.
-            
             setLoadingState(true);
+            
+            // Thêm độ trễ nhỏ để spinner hiển thị rõ ràng hơn trong quá trình tải lại nhanh
+            await new Promise(resolve => setTimeout(resolve, 300)); 
 
             const files = await fetchFolderContents(folderId, GOOGLE_DRIVE_API_KEY);
 
             setLoadingState(false);
+            isProcessing = false;
 
             if (files && files.length > 0) {
                 errorFeedback.classList.add('hidden');
@@ -353,10 +361,17 @@
                 }
             }
         }
-
-        // Tự động chạy khi tải trang để tải nội dung từ thư mục đã cấu hình sẵn
+        
+        // 1. Tự động chạy khi tải trang lần đầu
         handleProcess(HARDCODED_FOLDER_ID);
         
+        // 2. Thiết lập hẹn giờ để tải lại sau mỗi 20 giây
+        setInterval(() => {
+            console.log(`Tự động tải lại nội dung Drive sau ${RELOAD_INTERVAL_MS / 1000} giây...`);
+            handleProcess(HARDCODED_FOLDER_ID);
+        }, RELOAD_INTERVAL_MS);
+
+
         // Sự kiện đóng modal bằng phím ESC
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && !previewModal.classList.contains('hidden')) {
